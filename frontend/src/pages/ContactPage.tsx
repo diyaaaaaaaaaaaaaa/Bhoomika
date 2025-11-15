@@ -31,9 +31,10 @@ const ContactPage = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* Revenue Officers */}
           {contacts.map((section) => (
-            <Card key={section.category} className="vintage-border">
+            <Card key={section.category} className="vintage-border mb-6 p-4">
               <CardHeader>
                 <CardTitle className="text-xl">{section.category}</CardTitle>
+                
               </CardHeader>
               <CardContent className="space-y-4">
                 {section.members.map((member, idx) => (
@@ -49,14 +50,7 @@ const ContactPage = () => {
                         <p className="font-medium">{member.phone}</p>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="default" size="sm" className="gap-2">
-                          <Phone className="w-4 h-4" />
-                          CALL
-                        </Button>
-                        <Button variant="secondary" size="sm" className="gap-2">
-                          <MessageCircle className="w-4 h-4" />
-                          WHATSAPP
-                        </Button>
+
                       </div>
                     </div>
                   </div>
@@ -68,7 +62,7 @@ const ContactPage = () => {
 
         {/* Support Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="vintage-border">
+          <Card className="vintage-border ">
             <CardHeader>
               <CardTitle>🆘 Support & Help</CardTitle>
             </CardHeader>

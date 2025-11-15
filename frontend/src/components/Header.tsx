@@ -1,5 +1,6 @@
 // src/components/Header.tsx
-import { Link } from "react-router-dom";
+
+import { Link, useNavigate } from "react-router-dom";
 import { Globe, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -9,6 +10,9 @@ export const Header = () => {
   const { language, toggleLanguage, t } = useLanguage();
   const [walletConnected, setWalletConnected] = useState(false);
   const [walletAddress, setWalletAddress] = useState("");
+  const navigate = useNavigate();
+
+  const role = localStorage.getItem("role");
 
   const handleWalletConnect = () => {
     if (!walletConnected) {
@@ -20,9 +24,16 @@ export const Header = () => {
     }
   };
 
+  const logout = () => {
+    localStorage.removeItem("role");
+    navigate("/");
+    window.location.reload();
+  };
+
   return (
     <header className="sticky top-0 z-50 w-full border-b-2 border-border bg-card parchment shadow-md">
       <div className="container mx-auto px-4 py-4">
+        {/* Top Row */}
         <div className="flex items-center justify-between mb-4">
           <Link to="/" className="flex items-center gap-3">
             <div className="text-4xl">🏛️</div>
@@ -33,42 +44,66 @@ export const Header = () => {
           </Link>
 
           <div className="flex items-center gap-3">
+            {/* Language */}
             <Button variant="outline" size="sm" onClick={toggleLanguage} className="gap-2">
               <Globe className="w-4 h-4" />
               {language === "en" ? "हिंदी" : "English"}
             </Button>
 
-            <Button variant={walletConnected ? "secondary" : "default"} size="sm" onClick={handleWalletConnect} className="gap-2">
+            {/* Wallet */}
+            <Button
+              variant={walletConnected ? "secondary" : "default"}
+              size="sm"
+              onClick={handleWalletConnect}
+              className="gap-2"
+            >
               <Wallet className="w-4 h-4" />
               {walletConnected ? walletAddress : t("nav.connectWallet")}
             </Button>
 
-            <Link to="/login">
-              <Button variant="secondary" size="sm" className="gap-2">👤 Login</Button>
-            </Link>
+            {/* Login Buttons Removed — Now Uses Role System */}
+            {!role && (
+              <Button variant="secondary" size="sm" onClick={() => navigate("/")}>
+                🔐 Login
+              </Button>
+            )}
 
-            <Link to="/login-council">
-              <Button variant="secondary" size="sm" className="gap-2">🧑‍💼 Council Login</Button>
-            </Link>
+            {/* Logout */}
+            {role && (
+              <Button variant="destructive" size="sm" onClick={logout}>
+                🚪 Logout
+              </Button>
+            )}
           </div>
         </div>
 
+        {/* Navigation */}
         <nav className="flex flex-wrap gap-2 justify-center md:justify-start">
-          <Link to="/">
-            <Button variant="ghost" size="sm" className="gap-2">🔍 {t("nav.search")}</Button>
-          </Link>
-          <Link to="/add-land">
-            <Button variant="ghost" size="sm" className="gap-2">➕ {t("nav.addLand")}</Button>
-          </Link>
-          <Link to="/my-lands">
-            <Button variant="ghost" size="sm" className="gap-2">📋 {t("nav.myLands")}</Button>
-          </Link>
-          <Link to="/council">
-            <Button variant="ghost" size="sm" className="gap-2">🧑‍💼 {t("nav.council")}</Button>
-          </Link>
-          <Link to="/contact">
-            <Button variant="ghost" size="sm" className="gap-2">📞 {t("nav.contact")}</Button>
-          </Link>
+          {/* User Routes */}
+          {role === "user" && (
+            <>
+              <Link to="/search">
+                <Button variant="ghost" size="sm" className="gap-2">🔍 {t("nav.search")}</Button>
+              </Link>
+
+              <Link to="/add-land">
+                <Button variant="ghost" size="sm" className="gap-2">➕ {t("nav.addLand")}</Button>
+              </Link>
+
+              <Link to="/contact">
+                <Button variant="ghost" size="sm" className="gap-2">📞 {t("nav.contact")}</Button>
+              </Link>
+            </>
+          )}
+
+          {/* Council Routes */}
+          {role === "council" && (
+            <Link to="/council">
+              <Button variant="ghost" size="sm" className="gap-2">🧑‍💼 {t("nav.council")}</Button>
+            </Link>
+          )}
+
+          {/* Always visible */}
           <Link to="/about">
             <Button variant="ghost" size="sm" className="gap-2">ℹ️ {t("nav.about")}</Button>
           </Link>
