@@ -1,46 +1,68 @@
 // src/pages/ParcelDetailPage.tsx
+import React from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, ExternalLink, Download, Share2, Phone, Mail, MessageCircle, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useParcel } from "@/contexts/ParcelContext";
 import { useToast } from "@/hooks/use-toast";
 import { useContract } from "@/hooks/useContract";
 
-const ParcelDetailPage = () => {
+const ParcelDetailPage: React.FC = () => {
   const { id } = useParams();
-  const { getParcelById, councilMembers, disputeParcel, transferParcelOwner } = useParcel();
-  const parcel = getParcelById(Number(id));
+  const pid = Number(id);
+  const { getParcelById, disputeParcel, updateParcel } = useParcel();
+  const parcel = getParcelById(pid);
   const { toast } = useToast();
-  const { dispute: disputeOnChain, transfer: transferOnChain } = useContract();
+  const { getParcel: getParcelOnChain } = useContract();
 
-  const handleDispute = async () => {
+  const handleDispute = () => {
     if (!parcel) return;
-    try {
-      toast({ title: "Submitting dispute...", description: `Disputing parcel #${parcel.id}` });
-      await disputeOnChain(parcel.id);
-      disputeParcel(parcel.id);
-      toast({ title: "⚠️ Parcel Disputed", description: `Parcel #${parcel.id} has been marked as disputed` });
-    } catch (err) {
-      toast({ title: "Dispute failed", description: (err as Error).message || "Could not dispute on-chain", variant: "destructive" });
-    }
+    disputeParcel(parcel.id);
+    toast({ title: "Dispute raised", description: `Parcel #${parcel.id} marked disputed locally` });
   };
 
-  const handleTransfer = async () => {
+  const syncFromChain = async () => {
     if (!parcel) return;
-    const newOwner = prompt("Enter new owner's wallet address (hex)");
-    if (!newOwner) return;
-
+    toast({ title: "Syncing", description: "Fetching on-chain data..." });
     try {
-      toast({ title: "Submitting transfer...", description: `Transferring parcel #${parcel.id}` });
-      await transferOnChain(parcel.id, newOwner);
-      // update local store if your ParcelContext exposes such a function
-      if (transferParcelOwner) transferParcelOwner(parcel.id, newOwner);
-      toast({ title: "✅ Ownership Transferred", description: `Parcel #${parcel.id} ownership updated.` });
+      const onChain = await getParcelOnChain(parcel.id);
+      // onChain shape depends on node. We'll attempt common shapes:
+      // If view returned a struct-like object -> adapt
+      const data = onChain?.data ?? onChain; // try
+      // Heuristics:
+      const statusOnChain =
+        data?.status ??
+        (data?.status_enum ? data.status_enum : undefined) ??
+        undefined;
+
+      // If status is numeric code (0..3) convert
+      let newStatus: any = undefined;
+      if (statusOnChain !== undefined) {
+        const n = Number(statusOnChain);
+        if (!Number.isNaN(n)) {
+          newStatus = n === 1 ? "approved" : n === 2 ? "rejected" : n === 3 ? "disputed" : "pending";
+        } else {
+          // maybe string like "STATUS_APPROVED"
+          if (typeof statusOnChain === "string") {
+            if (statusOnChain.toLowerCase().includes("approved")) newStatus = "approved";
+            else if (statusOnChain.toLowerCase().includes("rejected")) newStatus = "rejected";
+            else if (statusOnChain.toLowerCase().includes("disputed")) newStatus = "disputed";
+            else newStatus = "pending";
+          }
+        }
+      }
+
+      if (newStatus) {
+        updateParcel(parcel.id, { status: newStatus });
+        toast({ title: "Synced", description: `Local status updated to ${newStatus}` });
+      } else {
+        toast({ title: "No status found", description: "Couldn't infer on-chain status." });
+      }
     } catch (err) {
-      toast({ title: "Transfer failed", description: (err as Error).message || "Could not transfer on-chain", variant: "destructive" });
+      toast({ title: "Sync failed", description: (err as Error).message || "Could not fetch on-chain parcel", variant: "destructive" });
     }
   };
 
@@ -57,13 +79,7 @@ const ParcelDetailPage = () => {
     );
   }
 
-  const tehsildar = councilMembers[0] || {
-    name: "Not Assigned",
-    role: "Tehsildar",
-    phone: "N/A",
-    office: "N/A",
-    walletAddress: "",
-  };
+  const tehsildar = { name: "Not Assigned", role: "Tehsildar", phone: "N/A", office: "N/A", walletAddress: "" };
 
   return (
     <div className="min-h-screen tribal-pattern">
@@ -78,10 +94,9 @@ const ParcelDetailPage = () => {
 
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-primary mb-2">
-                📍 PARCEL #{parcel.id} - KHASRA {parcel.khasraNumber}
-              </h1>
+              <h1 className="text-3xl md:text-4xl font-bold text-primary mb-2">📍 PARCEL #{parcel.id} - KHASRA {parcel.khasraNumber}</h1>
             </div>
+
             <div className="flex items-center gap-3">
               <StatusBadge status={parcel.status} className="text-lg px-4 py-2" />
               {parcel.status === "approved" && (
@@ -98,7 +113,7 @@ const ParcelDetailPage = () => {
           <div className="lg:col-span-2 space-y-6">
             <Card className="vintage-border">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">👤 OWNER DETAILS</CardTitle>
+                <CardTitle>👤 OWNER DETAILS</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div>
@@ -107,19 +122,22 @@ const ParcelDetailPage = () => {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Wallet Address</p>
-                  <p className="font-mono text-sm">{parcel.ownerWallet.substring(0, 10)}...</p>
+                  <p className="font-mono text-sm">{parcel.ownerWallet}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Total Parcels Owned</p>
-                  <p className="font-semibold">3 parcels</p>
+                  <p className="font-semibold">—</p>
                 </div>
-                <Button variant="outline" size="sm">View All Parcels by Owner</Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm">View All Parcels by Owner</Button>
+                  <Button size="sm" onClick={syncFromChain}>🔁 Sync from chain</Button>
+                </div>
               </CardContent>
             </Card>
 
             <Card className="vintage-border">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">📍 LOCATION DETAILS</CardTitle>
+                <CardTitle>📍 LOCATION DETAILS</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-2 gap-4">
@@ -143,7 +161,7 @@ const ParcelDetailPage = () => {
                 <Separator />
                 <div>
                   <p className="text-sm text-muted-foreground">Area</p>
-                  <p className="text-lg font-bold text-primary">{parcel.area.toLocaleString()} sqm ({(parcel.area / 10000).toFixed(2)} hectare)</p>
+                  <p className="text-lg font-bold text-primary">{parcel.area.toLocaleString()} sqm</p>
                 </div>
                 {parcel.notes && (
                   <div>
@@ -157,7 +175,7 @@ const ParcelDetailPage = () => {
             {parcel.documentCID && (
               <Card className="vintage-border">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">📄 DOCUMENT DETAILS</CardTitle>
+                  <CardTitle>📄 DOCUMENT DETAILS</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div>
@@ -165,45 +183,9 @@ const ParcelDetailPage = () => {
                     <p className="font-mono text-sm break-all">{parcel.documentCID}</p>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="gap-2">
-                      <ExternalLink className="w-4 h-4" />
-                      VIEW ON IPFS
-                    </Button>
-                    <Button variant="outline" size="sm" className="gap-2">
-                      <Download className="w-4 h-4" />
-                      DOWNLOAD
-                    </Button>
-                    <Button variant="default" size="sm" className="gap-2"> 
-                      <CheckCircle className="w-4 h-4" /> VERIFY
-                    </Button>
+                    <Button variant="outline" size="sm" className="gap-2"><ExternalLink className="w-4 h-4" /> VIEW ON IPFS</Button>
+                    <Button variant="outline" size="sm" className="gap-2"><Download className="w-4 h-4" /> DOWNLOAD</Button>
                   </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {parcel.approvals && parcel.approvals.length > 0 && (
-              <Card className="vintage-border">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">✅ APPROVAL DETAILS</CardTitle>
-                  <CardDescription>Status: Approved ({parcel.approvals.length}/2 Council Members)</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-3">
-                    {parcel.approvals.map((approval, index) => (
-                      <div key={index} className="border-l-4 border-status-approved pl-4">
-                        <p className="font-semibold flex items-center gap-2">
-                          <CheckCircle className="w-4 h-4 text-status-approved" />
-                          Approved by: {approval.councilMemberName}
-                        </p>
-                        <p className="text-sm text-muted-foreground">{approval.councilMemberRole}</p>
-                        <p className="text-sm">Date: {approval.approvalDate}</p>
-                        <p className="text-xs font-mono text-muted-foreground">Signature: {approval.signature}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <ExternalLink className="w-4 h-4" /> VIEW ON BLOCKCHAIN
-                  </Button>
                 </CardContent>
               </Card>
             )}
@@ -212,20 +194,12 @@ const ParcelDetailPage = () => {
           <div className="space-y-6">
             <Card className="vintage-border">
               <CardHeader>
-                <CardTitle className="text-lg">📌 Know Your Revenue Minister</CardTitle>
+                <CardTitle>📌 Know Your Revenue Minister</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div>
                   <p className="text-sm text-muted-foreground">Tehsildar Name</p>
                   <p className="font-semibold">{tehsildar.name}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Phone</p>
-                  <p className="font-semibold">{tehsildar.phone}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Office Address</p>
-                  <p className="text-sm">{tehsildar.office}</p>
                 </div>
                 <Separator />
                 <div className="flex flex-col gap-2">
@@ -238,14 +212,12 @@ const ParcelDetailPage = () => {
 
             <Card className="vintage-border">
               <CardHeader>
-                <CardTitle className="text-lg">⚡ ACTIONS</CardTitle>
+                <CardTitle>⚡ ACTIONS</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {parcel.status === "approved" && (
                   <>
-                    <Button variant="default" className="w-full" onClick={handleTransfer}>
-                      ➡️ TRANSFER OWNERSHIP
-                    </Button>
+                    <Button variant="default" className="w-full">➡️ TRANSFER OWNERSHIP</Button>
                     <Button variant="secondary" className="w-full">📑 PRINT CERTIFICATE</Button>
                   </>
                 )}

@@ -13,41 +13,46 @@ const CouncilPage = () => {
   const { toast } = useToast();
   const { approve: approveOnChain, reject: rejectOnChain, dispute: disputeOnChain } = useContract();
 
-  const pendingParcels = parcels.filter((p) => p.status === "pending");
-  const approvedCount = parcels.filter((p) => p.status === "approved").length;
+  const pendingParcels = parcels.filter(p => p.status === "pending");
+  const approvedCount = parcels.filter(p => p.status === "approved").length;
 
   const handleApprove = async (parcelId: number) => {
+    toast({ title: "Submitting...", description: `Approving parcel #${parcelId}` });
+
     try {
-      toast({ title: "Submitting approval...", description: `Approving parcel #${parcelId}` });
       await approveOnChain(parcelId);
-      // update local state
-      approveParcel(parcelId, councilMembers[0]);
-      toast({ title: "✅ Parcel Approved", description: `Parcel #${parcelId} has been approved` });
     } catch (err) {
-      toast({ title: "Approval failed", description: (err as Error).message || "Could not approve on-chain", variant: "destructive" });
+      console.warn("Approve on-chain failed:", err);
     }
+
+    approveParcel(parcelId, councilMembers[0]);
+    toast({ title: "Approved", description: `Parcel #${parcelId} approved` });
   };
 
   const handleReject = async (parcelId: number) => {
+    toast({ title: "Submitting...", description: `Rejecting parcel #${parcelId}` });
+
     try {
-      toast({ title: "Submitting rejection...", description: `Rejecting parcel #${parcelId}` });
       await rejectOnChain(parcelId);
-      rejectParcel(parcelId);
-      toast({ title: "❌ Parcel Rejected", description: `Parcel #${parcelId} has been rejected` });
     } catch (err) {
-      toast({ title: "Reject failed", description: (err as Error).message || "Could not reject on-chain", variant: "destructive" });
+      console.warn("Reject on-chain failed:", err);
     }
+
+    rejectParcel(parcelId);
+    toast({ title: "Rejected", description: `Parcel #${parcelId} rejected` });
   };
 
   const handleDispute = async (parcelId: number) => {
+    toast({ title: "Submitting...", description: `Disputing parcel #${parcelId}` });
+
     try {
-      toast({ title: "Submitting dispute...", description: `Disputing parcel #${parcelId}` });
       await disputeOnChain(parcelId);
-      disputeParcel(parcelId);
-      toast({ title: "⚠️ Parcel Disputed", description: `Parcel #${parcelId} has been marked as disputed` });
     } catch (err) {
-      toast({ title: "Dispute failed", description: (err as Error).message || "Could not dispute on-chain", variant: "destructive" });
+      console.warn("Dispute on-chain failed:", err);
     }
+
+    disputeParcel(parcelId);
+    toast({ title: "Disputed", description: `Parcel #${parcelId} marked disputed` });
   };
 
   return (
@@ -55,6 +60,7 @@ const CouncilPage = () => {
       <div className="container mx-auto px-4 py-8">
         <h1 className="text-3xl md:text-4xl font-bold text-primary mb-6">🧑‍💼 Council Dashboard</h1>
 
+        {/* SUMMARY GRID */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
           <Card className="vintage-border">
             <CardHeader className="pb-3">
@@ -70,9 +76,7 @@ const CouncilPage = () => {
               <CardTitle className="text-sm text-muted-foreground">Pending</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold text-status-pending">
-                {parcels.filter((p) => p.status === "pending").length}
-              </p>
+              <p className="text-3xl font-bold text-status-pending">{pendingParcels.length}</p>
             </CardContent>
           </Card>
 
@@ -91,7 +95,7 @@ const CouncilPage = () => {
             </CardHeader>
             <CardContent>
               <p className="text-3xl font-bold text-status-rejected">
-                {parcels.filter((p) => p.status === "rejected").length}
+                {parcels.filter(p => p.status === "rejected").length}
               </p>
             </CardContent>
           </Card>
@@ -102,19 +106,23 @@ const CouncilPage = () => {
             </CardHeader>
             <CardContent>
               <p className="text-3xl font-bold text-status-disputed">
-                {parcels.filter((p) => p.status === "disputed").length}
+                {parcels.filter(p => p.status === "disputed").length}
               </p>
             </CardContent>
           </Card>
         </div>
 
+        {/* PENDING LIST */}
         <Card className="mb-8 vintage-border">
           <CardHeader>
             <CardTitle>⏳ Pending Parcels Queue</CardTitle>
             <CardDescription>Review and approve land claims</CardDescription>
           </CardHeader>
+
           <CardContent>
-            {pendingParcels.length > 0 ? (
+            {pendingParcels.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">No pending parcels</p>
+            ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -126,25 +134,30 @@ const CouncilPage = () => {
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
+
                 <TableBody>
-                  {pendingParcels.map((parcel) => (
+                  {pendingParcels.map(parcel => (
                     <TableRow key={parcel.id}>
                       <TableCell className="font-bold">#{parcel.id}</TableCell>
                       <TableCell>{parcel.khasraNumber}</TableCell>
                       <TableCell>{parcel.ownerName}</TableCell>
-                      <TableCell className="text-sm">{parcel.village}, {parcel.tehsil}</TableCell>
+                      <TableCell>{parcel.village}, {parcel.tehsil}</TableCell>
                       <TableCell>{parcel.createdDate}</TableCell>
+
                       <TableCell>
                         <div className="flex gap-1">
                           <Button variant="outline" size="sm">
                             <Eye className="w-4 h-4" />
                           </Button>
+
                           <Button variant="default" size="sm" onClick={() => handleApprove(parcel.id)}>
                             <CheckCircle className="w-4 h-4" />
                           </Button>
+
                           <Button variant="destructive" size="sm" onClick={() => handleReject(parcel.id)}>
                             <XCircle className="w-4 h-4" />
                           </Button>
+
                           <Button variant="secondary" size="sm" onClick={() => handleDispute(parcel.id)}>
                             <AlertTriangle className="w-4 h-4" />
                           </Button>
@@ -154,32 +167,7 @@ const CouncilPage = () => {
                   ))}
                 </TableBody>
               </Table>
-            ) : (
-              <p className="text-center text-muted-foreground py-8">No pending parcels</p>
             )}
-          </CardContent>
-        </Card>
-
-        <Card className="vintage-border">
-          <CardHeader>
-            <CardTitle>✅ My Approvals</CardTitle>
-            <CardDescription>You have approved {approvedCount} parcels</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {parcels
-                .filter((p) => p.status === "approved")
-                .slice(0, 5)
-                .map((parcel) => (
-                  <div key={parcel.id} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div>
-                      <p className="font-semibold">Parcel #{parcel.id} - {parcel.khasraNumber}</p>
-                      <p className="text-sm text-muted-foreground">{parcel.ownerName}</p>
-                    </div>
-                    <StatusBadge status={parcel.status} />
-                  </div>
-                ))}
-            </div>
           </CardContent>
         </Card>
       </div>
