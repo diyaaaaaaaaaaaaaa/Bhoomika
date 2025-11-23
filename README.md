@@ -1,8 +1,3 @@
-Here’s a clean, professional **README.md** for your GitHub repository — tailored for **Bhoomika**, your land-verification DApp built during Hack-A-Sol.
-
-You can copy-paste directly into your repo.
-
----
 
 # 🌾 **Bhoomika — Blockchain-Based Land Verification System**
 
